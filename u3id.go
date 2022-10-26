@@ -21,7 +21,7 @@ func get_golang_error(c_error C.struct_Error) error {
 	}
 }
 
-func u3id_s(
+func U3id_s(
 	timestamp_integer_part_length_bits int,
 	timestamp_decimal_part_length_bits int,
 	total_length_bits int,
@@ -49,7 +49,7 @@ func u3id_s(
 	return go_u3id, get_golang_error(c_error)
 }
 
-func u3id_c(
+func U3id_c(
 	timestamp_integer_part_length_bits int,
 	timestamp_decimal_part_length_bits int,
 	total_length_bits int,
@@ -85,7 +85,7 @@ func u3id_c(
 	return go_u3id, get_golang_error(c_error)
 }
 
-func u3id_t(
+func U3id_t(
 	timestamp_integer_part_length_bits int,
 	timestamp_decimal_part_length_bits int,
 	total_length_bits int,
@@ -117,7 +117,7 @@ func u3id_t(
 	return go_u3id, get_golang_error(c_error)
 }
 
-func u3id_a(
+func U3id_a(
 	timestamp_integer_part_length_bits int,
 	timestamp_decimal_part_length_bits int,
 	total_length_bits int,
