@@ -1,5 +1,6 @@
-//package u3id
-package main
+package u3id
+
+//package main
 
 // #cgo LDFLAGS: -lssl -lcrypto
 // #cgo CFLAGS: -I /usr/include/openssl
