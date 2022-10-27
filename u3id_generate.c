@@ -601,26 +601,19 @@ void test_pg(void){
 //    uuuid_out = (unsigned char *)calloc((total_length_bits)/8, sizeof(char));
 
     generate_u3id_std(
-        &uuuid_out,
+        (unsigned char*)(&uuuid_out),
         timestamp_integer_part_length_bits,
         timestamp_decimal_part_length_bits,
         total_length_bits,
         &error
     );
 
-//    struct pg_uuid_t uuid_datum;
-
-
-
-    // pg expects big endian.
-//    convert_little_to_big_endian(&uuid_out, 16);
-//    PG_RETURN_UUID_P(uuid_out);
-    //PG_RETURN_BYTEA_P(&uuid_out);
 
     printBits(16, &uuuid_out);
-    convert_little_to_big_endian(&uuuid_out, 16);
+    convert_little_to_big_endian((unsigned char*)(&uuuid_out), 16);
     printBits(16, &uuuid_out);
 }
+
 //int main(void)
 //{
 ////    test_std();

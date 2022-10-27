@@ -33,7 +33,7 @@ func U3id_s(
 	c_timestamp_decimal_part_length_bits := C.uint(timestamp_decimal_part_length_bits)
 	c_total_length_bits := C.uint(total_length_bits)
 
-	uuuid_out := C.malloc((C.ulong)(c_total_length_bits / 8))
+	uuuid_out := C.calloc(1, (C.ulong)(c_total_length_bits/8))
 	defer C.free(unsafe.Pointer(uuuid_out))
 
 	C.generate_u3id_std(
@@ -62,7 +62,7 @@ func U3id_c(
 	c_timestamp_decimal_part_length_bits := C.uint(timestamp_decimal_part_length_bits)
 	c_total_length_bits := C.uint(total_length_bits)
 
-	uuuid_out := C.malloc((C.ulong)(c_total_length_bits / 8))
+	uuuid_out := C.calloc(1, (C.ulong)(c_total_length_bits/8))
 	defer C.free(unsafe.Pointer(uuuid_out))
 
 	c_chaotic_part_seed := C.CString(chaotic_part_seed)
@@ -99,7 +99,7 @@ func U3id_t(
 	c_timestamp_decimal_part_length_bits := C.uint(timestamp_decimal_part_length_bits)
 	c_total_length_bits := C.uint(total_length_bits)
 
-	uuuid_out := C.malloc((C.ulong)(c_total_length_bits / 8))
+	uuuid_out := C.calloc(1, (C.ulong)(c_total_length_bits/8))
 	defer C.free(unsafe.Pointer(uuuid_out))
 
 	C.generate_u3id_supply_time(
@@ -117,7 +117,6 @@ func U3id_t(
 	return go_u3id, get_golang_error(c_error)
 }
 
-//test
 func U3id_a(
 	timestamp_integer_part_length_bits int,
 	timestamp_decimal_part_length_bits int,
@@ -133,7 +132,8 @@ func U3id_a(
 	c_timestamp_decimal_part_length_bits := C.uint(timestamp_decimal_part_length_bits)
 	c_total_length_bits := C.uint(total_length_bits)
 
-	uuuid_out := C.malloc((C.ulong)(c_total_length_bits / 8))
+	uuuid_out := C.calloc(1, (C.ulong)(c_total_length_bits/8))
+	//uuuid_out := C.malloc((C.ulong)(c_total_length_bits / 8))
 	defer C.free(unsafe.Pointer(uuuid_out))
 
 	c_chaotic_part_seed := C.CString(chaotic_part_seed)
