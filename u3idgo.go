@@ -1,4 +1,4 @@
-package u3id
+package u3idgo
 
 //package main
 
