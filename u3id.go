@@ -117,6 +117,7 @@ func U3id_t(
 	return go_u3id, get_golang_error(c_error)
 }
 
+//test
 func U3id_a(
 	timestamp_integer_part_length_bits int,
 	timestamp_decimal_part_length_bits int,
