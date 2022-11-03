@@ -55,10 +55,13 @@ void convert_little_to_big_endian(char * buf, unsigned int len){
 // it is not the bit location in memory, it is the bit location of the number
 // src and dest are the first byte the start copying. If little endian, this is the greatest byte, if big endian, this is the least byte
 // bytes to copy specifies the number of bytes of unshifted data to copy. If the data is shifted, then it will not copy the last tail piece.
-void copy_bits_from_source_to_dest(unsigned char *dest, unsigned char *src, size_t bit_shift, unsigned int bytes_to_copy, bool little_endian){
+void copy_bits_from_source_to_dest(unsigned char *dest, unsigned char *src, size_t bit_shift, unsigned int bytes_to_copy, bool little_endian, bool copy_remainder){
     bool debug = false;
     // TODO: this assumes that other than the first byte, the rest of dest is zeroed out. Make sure we do this.
     if(bit_shift >= 8){
+        return;
+    }
+    if(bytes_to_copy <= 0){
         return;
     }
 
@@ -110,6 +113,10 @@ void copy_bits_from_source_to_dest(unsigned char *dest, unsigned char *src, size
 
     }
 
+    if(copy_remainder && (bit_shift > 0)){
+        *dest |= remainder;
+    }
+
 }
 
 
@@ -140,6 +147,7 @@ void _generate_u3id(
     uint64_t integer_time_part,
     uint32_t decimal_time_part,
     unsigned char *chaotic_part,
+    size_t chaotic_part_length_bytes,
     struct Error *error
 ){
 
@@ -147,6 +155,12 @@ void _generate_u3id(
     unsigned int chaotic_part_length_bits = total_length_bits-timestamp_integer_part_length_bits-timestamp_decimal_part_length_bits;
 
 
+    if(total_length_bits < (timestamp_integer_part_length_bits+timestamp_decimal_part_length_bits)){
+        // The time component doesnt fit within the total length requested
+        error->code = E_VALUE_ERROR;
+        strcpy( error->message, "total_length_bits must be greater than or equal to timestamp_integer_part_length_bits+timestamp_decimal_part_length_bits");
+        return;
+    }
     if(total_length_bits % 8 != 0){
         // currently only allow whole numbers of bytes due to having to return a number in memory that must be a whole
         // number of bytes. Might be able to find a workaround for this. But probably isn't a useful requirement anyways.
@@ -170,28 +184,48 @@ void _generate_u3id(
         return;
     }
 
+    int total_length_bytes = total_length_bits/8;
 
+    // Figure out the number of bytes to copy for each part
+    int num_bytes_to_copy_for_integer_part = (timestamp_integer_part_length_bits+7)/8;
+    int num_bytes_to_copy_for_decimal_part = (timestamp_decimal_part_length_bits+7)/8;
+    int num_bytes_to_copy_for_chaotic_part = (chaotic_part_length_bits+7)/8;
+
+    // figure out the byte array index to start at for copying each part
+    // These are from the most significant end of the array.
+    // These are indices. So starts from 0.
+    int dest_i_for_decimal_part_start = timestamp_integer_part_length_bits/8;
+    int dest_i_for_chaotic_part_start = (timestamp_integer_part_length_bits+timestamp_decimal_part_length_bits)/8;
+
+    // Here we assume little endian TODO: big endian implementation
+    int buffer_i_for_decimal_part_start = total_length_bytes-1-dest_i_for_decimal_part_start;
+    int buffer_i_for_chaotic_part_start = total_length_bytes-1-dest_i_for_chaotic_part_start;
+
+    // figure out the bit shift for each part. The integer part is handled separately below because it uses memcpy instead of our custom copy function.
+    int bit_shift_for_decimal_part = timestamp_integer_part_length_bits % 8;
+    int bit_shift_for_chaotic_part = (timestamp_integer_part_length_bits+timestamp_decimal_part_length_bits) % 8;
+
+    // Determine whether we need to copy the remainder after bit shifting. We cannot just copy the remainder by default
+    // because it can lead to a buffer overflow.
+    int copy_remainder_of_decimal_part = (timestamp_decimal_part_length_bits+bit_shift_for_decimal_part+7)/8 > num_bytes_to_copy_for_decimal_part;
+    int copy_remainder_of_chaotic_part = (chaotic_part_length_bits+bit_shift_for_chaotic_part+7)/8 > num_bytes_to_copy_for_chaotic_part;
 
 
     //////////
     // the integer time part
     /////////
-    // TODO: check for running over the end of the memory
     // this is the little endian implementation. todo: big endian
     // For the integer part, we want to copy starting at the LSB up to timestamp_integer_part_length_bits. For little
     // endian, this is already the order in memory, so we can use memcopy
-    int num_bytes_to_copy_for_integer_part = timestamp_integer_part_length_bits/8;
 
-    // whether there is a remainder or not, we want to start putting the decimal part at the next byte.
-    int dest_i_for_decimal_part_start = num_bytes_to_copy_for_integer_part + 1;
 
     if(timestamp_integer_part_length_bits % 8 != 0){
-        num_bytes_to_copy_for_integer_part += 1;
         integer_time_part = integer_time_part << (8-(timestamp_integer_part_length_bits % 8));
     }
 
-
     memcpy(&uuuid_out[total_length_bits/8-num_bytes_to_copy_for_integer_part], &integer_time_part, num_bytes_to_copy_for_integer_part);
+
+
 
     if(debug){
         printf("num_bytes_to_copy_for_integer_part: %i\n", num_bytes_to_copy_for_integer_part);
@@ -208,13 +242,6 @@ void _generate_u3id(
     //////////
     // the fractional time part
     /////////
-    // determine the starting point:
-
-    int num_bytes_to_copy_for_decimal_part = timestamp_decimal_part_length_bits/8;
-    if(timestamp_decimal_part_length_bits % 8 != 0){
-        num_bytes_to_copy_for_decimal_part += 1;
-    }
-
     // The smallest increment we can have is 1x10^(-9).
     // We need 30 bits to capture this full resolution because 2^(-30) = 9.3132257e-10 is the minimum number of bits to make a number smaller than 1x10^(-9)
     // But lets just bit shift it by 31 so that it is shifted all the way to the left of the 64 bit integer and then we can read it directly later as the
@@ -226,12 +253,19 @@ void _generate_u3id(
     unsigned char *fractional_part_src_ptr = (unsigned char *)&fractional_part;
     fractional_part_src_ptr += (int)sizeof(fractional_part) - 1;
 
-    copy_bits_from_source_to_dest(&uuuid_out[total_length_bits/8-dest_i_for_decimal_part_start], fractional_part_src_ptr, timestamp_integer_part_length_bits % 8, num_bytes_to_copy_for_decimal_part, true);
+    copy_bits_from_source_to_dest(
+        &uuuid_out[buffer_i_for_decimal_part_start],
+        fractional_part_src_ptr,
+        bit_shift_for_decimal_part,
+        num_bytes_to_copy_for_decimal_part,
+        true,
+        copy_remainder_of_decimal_part
+    );
 
     if(debug){
         printf("The current time is %lld.%.9ld\n", (long long int) integer_time_part, (long int)decimal_time_part);
         printf("num_bytes_to_copy_for_decimal_part: %d\n", num_bytes_to_copy_for_decimal_part);
-        printf("fractional_part_src_ptr:\n");
+        printf("fractional_part_src:\n");
         printBits(sizeof(fractional_part), &fractional_part);
         printf("UUUID after appending decimal amount of time:\n");
         printBits(total_length_bits/8, uuuid_out);
@@ -245,30 +279,24 @@ void _generate_u3id(
     //////////
     // the chaotic part
     /////////
-    int dest_i_for_chaotic_part_start = dest_i_for_decimal_part_start + timestamp_decimal_part_length_bits/8;
-
-    int num_bytes_to_copy_for_chaotic_part = chaotic_part_length_bits/8;
-    if(num_bytes_to_copy_for_chaotic_part % 8 != 0){
-        num_bytes_to_copy_for_chaotic_part += 1;
-    }
-
-
 
     if(debug){
         printf("Rand bytes to be added:\n");
-        printBits(num_bytes_to_copy_for_chaotic_part, chaotic_part);
+        printBits(chaotic_part_length_bytes, chaotic_part);
         printf("num_bytes_to_copy_for_chaotic_part: %i\n", num_bytes_to_copy_for_chaotic_part);
     }
 
+    // To make things simple across implementations, lets take the most significant end of the chaotic part
     unsigned char *chaotic_part_src_ptr = chaotic_part;
-    chaotic_part_src_ptr += num_bytes_to_copy_for_chaotic_part-1;
+    chaotic_part_src_ptr += chaotic_part_length_bytes-1;
 
     copy_bits_from_source_to_dest(
-        &uuuid_out[total_length_bits/8-dest_i_for_chaotic_part_start],
+        &uuuid_out[buffer_i_for_chaotic_part_start],
         chaotic_part_src_ptr,
-        (timestamp_integer_part_length_bits+timestamp_decimal_part_length_bits) % 8,
+        bit_shift_for_chaotic_part,
         num_bytes_to_copy_for_chaotic_part,
-        true
+        true,
+        copy_remainder_of_chaotic_part
     );
 
     if(debug){
@@ -322,6 +350,7 @@ void generate_u3id_supply_chaotic(
         integer_time_part,
         decimal_time_part,
         (unsigned char *)&chaotic_part,
+        64,
         error
     );
 }
@@ -342,8 +371,9 @@ void generate_u3id_supply_time(
     }
 
     unsigned int chaotic_part_length_bits = total_length_bits-timestamp_integer_part_length_bits-timestamp_decimal_part_length_bits;
+    size_t chaotic_part_length_bytes = chaotic_part_length_bits/8+1;
     unsigned char *chaotic_part;
-    chaotic_part = (unsigned char *)calloc(chaotic_part_length_bits/8+1, sizeof(char));
+    chaotic_part = (unsigned char *)calloc(chaotic_part_length_bytes, sizeof(char));
 
     if(!RAND_bytes(chaotic_part, chaotic_part_length_bits/8+1)){
         //failed to generate chaotic part
@@ -360,6 +390,7 @@ void generate_u3id_supply_time(
         integer_time_part,
         decimal_time_part_ns,
         chaotic_part,
+        chaotic_part_length_bytes,
         error
     );
 
@@ -400,6 +431,7 @@ void generate_u3id_supply_all(
         integer_time_part,
         decimal_time_part_ns,
         chaotic_part,
+        64,
         error
     );
 
@@ -421,6 +453,7 @@ void generate_u3id_std(
     uint32_t decimal_time_part = (uint32_t)ts.tv_nsec;
 
     unsigned int chaotic_part_length_bits = total_length_bits-timestamp_integer_part_length_bits-timestamp_decimal_part_length_bits;
+    size_t chaotic_part_length_bytes = chaotic_part_length_bits/8+1;
     unsigned char *chaotic_part;
     chaotic_part = (unsigned char *)calloc(chaotic_part_length_bits/8+1, sizeof(char));
 
@@ -439,6 +472,7 @@ void generate_u3id_std(
         integer_time_part,
         decimal_time_part,
         chaotic_part,
+        chaotic_part_length_bytes,
         error
     );
 
