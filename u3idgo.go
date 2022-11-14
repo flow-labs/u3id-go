@@ -21,11 +21,13 @@ func get_golang_error(c_error C.struct_Error) error {
 	}
 }
 
+type U3id []byte
+
 func U3id_s(
 	timestamp_integer_part_length_bits int,
 	timestamp_decimal_part_length_bits int,
 	total_length_bits int,
-) ([]byte, error) {
+) (U3id, error) {
 	c_error := C.struct_Error{}
 	c_error.code = 0
 
@@ -54,7 +56,7 @@ func U3id_c(
 	timestamp_decimal_part_length_bits int,
 	total_length_bits int,
 	chaotic_part_seed string,
-) ([]byte, error) {
+) (U3id, error) {
 	c_error := C.struct_Error{}
 	c_error.code = 0
 
@@ -91,7 +93,7 @@ func U3id_t(
 	total_length_bits int,
 	integer_time_part int64,
 	decimal_time_part_ns int32,
-) ([]byte, error) {
+) (U3id, error) {
 	c_error := C.struct_Error{}
 	c_error.code = 0
 
@@ -124,7 +126,7 @@ func U3id_a(
 	integer_time_part int64,
 	decimal_time_part_ns int32,
 	chaotic_part_seed string,
-) ([]byte, error) {
+) (U3id, error) {
 	c_error := C.struct_Error{}
 	c_error.code = 0
 
